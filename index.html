@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini Golf Ball Roll</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #0f172a;
+      }
+
+      #hud {
+        position: fixed;
+        top: 1rem;
+        left: 1rem;
+        z-index: 1;
+        background: rgba(15, 23, 42, 0.75);
+        color: #e2e8f0;
+        padding: 0.8rem 1rem;
+        border-radius: 10px;
+        max-width: 320px;
+        line-height: 1.35;
+        font-size: 0.95rem;
+      }
+
+      #hud h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1rem;
+      }
+
+      #message {
+        margin-top: 0.35rem;
+        color: #86efac;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">
+      <h1>3D Ball Golf</h1>
+      <div>Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to roll the ball.</div>
+      <div>Goal: sink the white ball into the hole.</div>
+      <div id="message"></div>
+    </div>
+
+    <script type="module">
+      import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js";
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x87ceeb);
+
+      const camera = new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        100
+      );
+      camera.position.set(0, 10, 12);
+      camera.lookAt(0, 0, 0);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      document.body.appendChild(renderer.domElement);
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+      scene.add(ambientLight);
+
+      const sun = new THREE.DirectionalLight(0xffffff, 0.95);
+      sun.position.set(6, 12, 8);
+      scene.add(sun);
+
+      const groundSize = 30;
+      const wallLimit = groundSize / 2 - 0.6;
+
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(groundSize, groundSize),
+        new THREE.MeshStandardMaterial({ color: 0x27ae60 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      const ballRadius = 0.45;
+      const ball = new THREE.Mesh(
+        new THREE.SphereGeometry(ballRadius, 40, 40),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05 })
+      );
+      ball.position.set(-10, ballRadius, 10);
+      scene.add(ball);
+
+      // Hole setup
+      const holeRadius = 0.65;
+      const holePosition = new THREE.Vector3(10, 0.02, -9);
+
+      const hole = new THREE.Mesh(
+        new THREE.CylinderGeometry(holeRadius, holeRadius, 0.08, 40),
+        new THREE.MeshStandardMaterial({ color: 0x101010 })
+      );
+      hole.position.copy(holePosition);
+      scene.add(hole);
+
+      // Visual edge around hole
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(holeRadius + 0.04, 0.04, 12, 48),
+        new THREE.MeshStandardMaterial({ color: 0xd1d5db })
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(holePosition.x, 0.03, holePosition.z);
+      scene.add(ring);
+
+      // Flag: purely decorative, no collision logic tied to it
+      const flagPole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.04, 0.04, 2.8, 16),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.1, roughness: 0.6 })
+      );
+      flagPole.position.set(holePosition.x, 1.4, holePosition.z);
+      scene.add(flagPole);
+
+      const flag = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.0, 0.6),
+        new THREE.MeshStandardMaterial({ color: 0xe11d48, side: THREE.DoubleSide })
+      );
+      flag.position.set(holePosition.x + 0.55, 2.25, holePosition.z);
+      scene.add(flag);
+
+      const keys = {};
+      window.addEventListener("keydown", (event) => {
+        keys[event.key.toLowerCase()] = true;
+      });
+      window.addEventListener("keyup", (event) => {
+        keys[event.key.toLowerCase()] = false;
+      });
+
+      const message = document.getElementById("message");
+      const velocity = new THREE.Vector3();
+      const acceleration = 9.5;
+      const friction = 0.92;
+      let won = false;
+
+      const clock = new THREE.Clock();
+
+      function applyInput(dt) {
+        const dir = new THREE.Vector3();
+
+        if (keys["w"] || keys["arrowup"]) dir.z -= 1;
+        if (keys["s"] || keys["arrowdown"]) dir.z += 1;
+        if (keys["a"] || keys["arrowleft"]) dir.x -= 1;
+        if (keys["d"] || keys["arrowright"]) dir.x += 1;
+
+        if (dir.lengthSq() > 0) {
+          dir.normalize().multiplyScalar(acceleration * dt);
+          velocity.add(dir);
+        }
+      }
+
+      function updatePhysics(dt) {
+        if (won) return;
+
+        applyInput(dt);
+
+        velocity.multiplyScalar(Math.pow(friction, dt * 60));
+        ball.position.x += velocity.x * dt;
+        ball.position.z += velocity.z * dt;
+
+        // Keep ball inside the course
+        if (ball.position.x > wallLimit) {
+          ball.position.x = wallLimit;
+          velocity.x *= -0.35;
+        } else if (ball.position.x < -wallLimit) {
+          ball.position.x = -wallLimit;
+          velocity.x *= -0.35;
+        }
+
+        if (ball.position.z > wallLimit) {
+          ball.position.z = wallLimit;
+          velocity.z *= -0.35;
+        } else if (ball.position.z < -wallLimit) {
+          ball.position.z = -wallLimit;
+          velocity.z *= -0.35;
+        }
+
+        // Rotate ball to simulate rolling
+        const rollAxis = new THREE.Vector3(velocity.z, 0, -velocity.x).normalize();
+        const speed = velocity.length();
+        if (speed > 0.0001 && Number.isFinite(rollAxis.x)) {
+          ball.rotateOnWorldAxis(rollAxis, (speed * dt) / ballRadius);
+        }
+
+        const toHole = new THREE.Vector2(
+          ball.position.x - holePosition.x,
+          ball.position.z - holePosition.z
+        );
+
+        const sinkDistance = holeRadius - ballRadius * 0.32;
+        const canSink = toHole.length() < sinkDistance;
+        const slowEnough = velocity.length() < 2.2;
+
+        if (canSink && slowEnough) {
+          won = true;
+          velocity.set(0, 0, 0);
+          message.textContent = "Great shot! Ball sunk in the hole 🎉";
+        }
+
+        if (won) {
+          ball.position.y = THREE.MathUtils.lerp(ball.position.y, -0.2, dt * 3.5);
+          ball.position.x = THREE.MathUtils.lerp(ball.position.x, holePosition.x, dt * 3.5);
+          ball.position.z = THREE.MathUtils.lerp(ball.position.z, holePosition.z, dt * 3.5);
+        }
+      }
+
+      function updateCamera() {
+        const target = new THREE.Vector3(ball.position.x, 0, ball.position.z);
+        const camOffset = new THREE.Vector3(0, 10, 12);
+        const desired = target.clone().add(camOffset);
+
+        camera.position.lerp(desired, 0.06);
+        camera.lookAt(target.x, 0, target.z);
+      }
+
+      function animate() {
+        const dt = Math.min(clock.getDelta(), 1 / 30);
+        updatePhysics(dt);
+        updateCamera();
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
+</html>
