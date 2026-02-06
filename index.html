@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Neon Ball Golf 198X</title>
+    <title>Neon Ball Playground 198X</title>
     <style>
       :root {
         color-scheme: dark;
@@ -20,14 +20,14 @@
         position: fixed;
         top: 1rem;
         left: 1rem;
-        z-index: 10;
-        background: rgba(7, 7, 24, 0.72);
+        z-index: 20;
+        background: rgba(7, 7, 24, 0.74);
         border: 1px solid rgba(56, 189, 248, 0.6);
         box-shadow: 0 0 18px rgba(244, 114, 182, 0.4);
         color: #dbeafe;
         padding: 0.9rem 1rem;
         border-radius: 10px;
-        max-width: 380px;
+        max-width: 390px;
         line-height: 1.35;
         font-size: 0.94rem;
       }
@@ -60,10 +60,10 @@
   </head>
   <body>
     <div id="hud">
-      <h1>NEON BALL GOLF 198X</h1>
+      <h1>NEON BALL PLAYGROUND 198X</h1>
       <div>Controls: <strong>WASD</strong> or <strong>Arrow Keys</strong></div>
-      <div>Use ramps to launch. Hit neon pads for boost. Dodge obstacles.</div>
-      <div>Objective: sink the white ball quickly.</div>
+      <div>Collect all 10 coins. Use ramps to launch and boost pads for speed.</div>
+      <div><span class="stat-label">Coins:</span> <span id="coins">0/10</span></div>
       <div><span class="stat-label">Time:</span> <span id="time">0.00s</span></div>
       <div><span class="stat-label">Score:</span> <span id="score">--</span></div>
       <div><span class="stat-label">Best:</span> <span id="best">--</span></div>
@@ -75,132 +75,162 @@
       import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js";
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x12001f, 0.008);
+      scene.fog = new THREE.FogExp2(0x12001f, 0.0065);
 
-      const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 320);
+      const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 420);
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       document.body.appendChild(renderer.domElement);
 
-      scene.add(new THREE.HemisphereLight(0x7dd3fc, 0x20003a, 0.65));
-      const sunLight = new THREE.DirectionalLight(0xff8bdc, 1.1);
-      sunLight.position.set(18, 30, 10);
+      scene.add(new THREE.HemisphereLight(0x7dd3fc, 0x20003a, 0.62));
+      const sunLight = new THREE.DirectionalLight(0xff8bdc, 1.12);
+      sunLight.position.set(30, 38, 18);
       scene.add(sunLight);
 
       const horizonSun = new THREE.Mesh(
-        new THREE.CircleGeometry(9, 64),
+        new THREE.CircleGeometry(12, 64),
         new THREE.MeshBasicMaterial({ color: 0xff7eb6 })
       );
-      horizonSun.position.set(0, 16, -130);
+      horizonSun.position.set(-20, 18, -170);
       scene.add(horizonSun);
 
-      const courseLength = 128;
-      const courseWidth = 36;
-      const wallX = courseWidth / 2 - 0.7;
-      const wallZMin = -courseLength / 2 + 0.8;
-      const wallZMax = courseLength / 2 - 0.8;
+      const playgroundSize = 120;
+      const wallLimit = playgroundSize / 2 - 1;
 
       const baseFloor = new THREE.Mesh(
-        new THREE.PlaneGeometry(courseWidth, courseLength),
-        new THREE.MeshStandardMaterial({ color: 0x071228, roughness: 0.92, metalness: 0.04 })
+        new THREE.PlaneGeometry(playgroundSize, playgroundSize),
+        new THREE.MeshStandardMaterial({ color: 0x061024, roughness: 0.92, metalness: 0.04 })
       );
       baseFloor.rotation.x = -Math.PI / 2;
       scene.add(baseFloor);
 
-      const grid = new THREE.GridHelper(courseWidth, 36, 0xff4db8, 0x22d3ee);
+      const grid = new THREE.GridHelper(playgroundSize, 60, 0xff4db8, 0x22d3ee);
       grid.position.y = 0.03;
       scene.add(grid);
 
       const lane = new THREE.Mesh(
-        new THREE.PlaneGeometry(courseWidth - 2, courseLength - 2),
+        new THREE.PlaneGeometry(playgroundSize - 2, playgroundSize - 2),
         new THREE.MeshStandardMaterial({ color: 0x0d6b4b, roughness: 0.82, metalness: 0.03 })
       );
       lane.rotation.x = -Math.PI / 2;
       lane.position.y = 0.015;
       scene.add(lane);
 
-      // Ramps defined by center, size, orientation axis, and signed rise.
+      // Robust ramp model: every ramp has an explicit facing direction vector.
       const ramps = [
-        { cx: 0, cz: 34, width: 12, depth: 16, rise: 3.6, axis: "z", color: 0x166534 },
-        { cx: -8, cz: 0, width: 10, depth: 14, rise: -3.2, axis: "z", color: 0x14532d },
-        { cx: 7, cz: -28, width: 9, depth: 12, rise: 4.4, axis: "x", color: 0x15803d },
-        { cx: 0, cz: -50, width: 14, depth: 16, rise: 5.4, axis: "z", color: 0x166534 },
+        { cx: -28, cz: 30, width: 10, length: 18, rise: 5.2, dir: [1, 0], color: 0x166534 },
+        { cx: 24, cz: 28, width: 10, length: 18, rise: 4.4, dir: [-1, 0], color: 0x15803d },
+        { cx: -8, cz: 0, width: 11, length: 20, rise: 6.2, dir: [0, -1], color: 0x166534 },
+        { cx: 22, cz: -6, width: 9, length: 18, rise: 4.6, dir: [0, 1], color: 0x14532d },
+        { cx: -30, cz: -24, width: 10, length: 18, rise: 5.0, dir: [1, 0], color: 0x15803d },
+        { cx: 0, cz: -30, width: 12, length: 22, rise: 7.1, dir: [0, -1], color: 0x166534 },
+        { cx: 30, cz: -32, width: 10, length: 18, rise: 5.0, dir: [-1, 0], color: 0x14532d },
+        { cx: -2, cz: 42, width: 12, length: 20, rise: 6.6, dir: [0, 1], color: 0x166534 },
       ];
 
-      function rampBounds(r) {
-        return {
-          xMin: r.cx - r.width / 2,
-          xMax: r.cx + r.width / 2,
-          zMin: r.cz - r.depth / 2,
-          zMax: r.cz + r.depth / 2,
-        };
-      }
+      function createRamp(ramp) {
+        const [dx, dz] = ramp.dir;
+        const len2 = Math.hypot(dx, dz);
+        const dirX = dx / len2;
+        const dirZ = dz / len2;
+        const sideX = -dirZ;
+        const sideZ = dirX;
 
-      function buildRampMesh(ramp) {
-        const b = rampBounds(ramp);
-        const geometry = new THREE.PlaneGeometry(ramp.width, ramp.depth, 1, 1);
-        const pos = geometry.attributes.position;
+        // World-space corners (bottom near edge to top far edge)
+        const halfW = ramp.width / 2;
+        const halfL = ramp.length / 2;
 
-        for (let i = 0; i < pos.count; i += 1) {
-          const x = pos.getX(i);
-          const z = pos.getY(i); // plane geometry local Y becomes world Z after rotation
-          const t = ramp.axis === "z"
-            ? (z + ramp.depth / 2) / ramp.depth
-            : (x + ramp.width / 2) / ramp.width;
-          const h = THREE.MathUtils.lerp(0, ramp.rise, t);
-          pos.setZ(i, h);
-        }
+        const p0 = new THREE.Vector3(
+          ramp.cx - dirX * halfL - sideX * halfW,
+          0,
+          ramp.cz - dirZ * halfL - sideZ * halfW
+        );
+        const p1 = new THREE.Vector3(
+          ramp.cx - dirX * halfL + sideX * halfW,
+          0,
+          ramp.cz - dirZ * halfL + sideZ * halfW
+        );
+        const p2 = new THREE.Vector3(
+          ramp.cx + dirX * halfL - sideX * halfW,
+          ramp.rise,
+          ramp.cz + dirZ * halfL - sideZ * halfW
+        );
+        const p3 = new THREE.Vector3(
+          ramp.cx + dirX * halfL + sideX * halfW,
+          ramp.rise,
+          ramp.cz + dirZ * halfL + sideZ * halfW
+        );
 
+        const geometry = new THREE.BufferGeometry();
+        const vertices = new Float32Array([
+          p0.x, p0.y, p0.z,
+          p1.x, p1.y, p1.z,
+          p2.x, p2.y, p2.z,
+          p2.x, p2.y, p2.z,
+          p1.x, p1.y, p1.z,
+          p3.x, p3.y, p3.z,
+        ]);
+        geometry.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
         geometry.computeVertexNormals();
 
         const mesh = new THREE.Mesh(
           geometry,
-          new THREE.MeshStandardMaterial({ color: ramp.color, roughness: 0.7, metalness: 0.08 })
+          new THREE.MeshStandardMaterial({ color: ramp.color, roughness: 0.68, metalness: 0.08, side: THREE.DoubleSide })
         );
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(ramp.cx, 0.06, ramp.cz);
+        mesh.position.y = 0.06;
         scene.add(mesh);
 
-        // Decorative edge line to make direction obvious.
         const edge = new THREE.Mesh(
-          new THREE.BoxGeometry(ramp.width, 0.1, 0.15),
-          new THREE.MeshStandardMaterial({ color: 0xf0abfc, emissive: 0xdb2777, emissiveIntensity: 0.4 })
+          new THREE.BoxGeometry(ramp.width, 0.12, 0.2),
+          new THREE.MeshStandardMaterial({ color: 0xf0abfc, emissive: 0xdb2777, emissiveIntensity: 0.45 })
         );
-        if (ramp.axis === "z") {
-          const highZ = ramp.rise >= 0 ? b.zMax : b.zMin;
-          edge.position.set(ramp.cx, Math.abs(ramp.rise) + 0.12, highZ);
-        } else {
-          const highX = ramp.rise >= 0 ? b.xMax : b.xMin;
-          edge.rotation.y = Math.PI / 2;
-          edge.position.set(highX, Math.abs(ramp.rise) + 0.12, ramp.cz);
-        }
+        edge.position.set(ramp.cx + dirX * halfL, ramp.rise + 0.12, ramp.cz + dirZ * halfL);
+        edge.rotation.y = Math.atan2(sideX, sideZ);
         scene.add(edge);
+
+        return {
+          cx: ramp.cx,
+          cz: ramp.cz,
+          width: ramp.width,
+          length: ramp.length,
+          rise: ramp.rise,
+          dirX,
+          dirZ,
+          sideX,
+          sideZ,
+          halfW,
+          halfL,
+        };
       }
 
-      ramps.forEach(buildRampMesh);
+      const rampPhysics = ramps.map(createRamp);
 
       const boostPads = [
-        { x: -10, z: 44, r: 1.9, boost: 13 },
-        { x: 9, z: 9, r: 1.7, boost: 12.5 },
-        { x: -1.5, z: -21, r: 2.2, boost: 14 },
-        { x: 6, z: -58, r: 1.8, boost: 15 },
+        { x: -42, z: 32, r: 2.2, boost: 13.5 },
+        { x: -5, z: 20, r: 2.1, boost: 13.5 },
+        { x: 35, z: 10, r: 2.0, boost: 14 },
+        { x: -22, z: -5, r: 2.2, boost: 15 },
+        { x: 15, z: -28, r: 1.9, boost: 14.5 },
+        { x: -38, z: -34, r: 2.3, boost: 15.5 },
       ];
 
       boostPads.forEach((pad) => {
         const mesh = new THREE.Mesh(
-          new THREE.CylinderGeometry(pad.r, pad.r, 0.2, 28),
+          new THREE.CylinderGeometry(pad.r, pad.r, 0.25, 28),
           new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xbe185d, emissiveIntensity: 1.15 })
         );
-        mesh.position.set(pad.x, 0.12, pad.z);
+        mesh.position.set(pad.x, 0.14, pad.z);
         scene.add(mesh);
       });
 
       const obstacles = [
-        { x: -6, z: 18, w: 2.2, d: 2.2, h: 1.8 },
-        { x: 5, z: -3, w: 2.5, d: 1.8, h: 2.2 },
-        { x: -2, z: -38, w: 3.6, d: 2.2, h: 2.6 },
-        { x: 8, z: -66, w: 2.2, d: 2.2, h: 2.2 },
+        { x: -14, z: 28, w: 4, d: 2.5, h: 3.1 },
+        { x: 8, z: 26, w: 2.4, d: 5, h: 2.4 },
+        { x: 18, z: -2, w: 4.4, d: 2.4, h: 2.7 },
+        { x: -28, z: -10, w: 3.2, d: 3.2, h: 2.8 },
+        { x: 30, z: -18, w: 3.6, d: 2.1, h: 3.3 },
+        { x: -8, z: -38, w: 5, d: 2.2, h: 3.2 },
       ];
 
       obstacles.forEach((o) => {
@@ -212,59 +242,41 @@
         scene.add(mesh);
       });
 
-      const ballRadius = 0.52;
+      const coinPositions = [
+        [-44, 40], [-18, 42], [9, 42], [34, 34], [42, 8], [28, -18], [3, -40], [-20, -38], [-44, -24], [-4, -4],
+      ];
+
+      const coins = coinPositions.map(([x, z]) => {
+        const mesh = new THREE.Mesh(
+          new THREE.TorusGeometry(1.05, 0.28, 12, 28),
+          new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xf59e0b, emissiveIntensity: 0.7, metalness: 0.55, roughness: 0.35 })
+        );
+        mesh.position.set(x, 1.35, z);
+        mesh.rotation.x = Math.PI / 2;
+        scene.add(mesh);
+        return { mesh, x, z, collected: false };
+      });
+
+      const ballRadius = 0.55;
       const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(ballRadius, 42, 42),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.1 })
+        new THREE.SphereGeometry(ballRadius, 44, 44),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.11 })
       );
-      ball.position.set(0, ballRadius, courseLength / 2 - 8);
+      ball.position.set(0, ballRadius, 50);
       scene.add(ball);
 
-      const trailLight = new THREE.PointLight(0x7dd3fc, 0.85, 18);
+      const trailLight = new THREE.PointLight(0x7dd3fc, 0.85, 19);
       scene.add(trailLight);
-
-      const holeRadius = 0.74;
-      const holePosition = new THREE.Vector3(0, 0.02, -courseLength / 2 + 6);
-
-      const hole = new THREE.Mesh(
-        new THREE.CylinderGeometry(holeRadius, holeRadius, 0.14, 40),
-        new THREE.MeshStandardMaterial({ color: 0x050505 })
-      );
-      hole.position.copy(holePosition);
-      scene.add(hole);
-
-      const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(holeRadius + 0.05, 0.05, 10, 48),
-        new THREE.MeshStandardMaterial({ color: 0xe5e7eb, emissive: 0xe5e7eb, emissiveIntensity: 0.32 })
-      );
-      ring.rotation.x = Math.PI / 2;
-      ring.position.set(holePosition.x, 0.05, holePosition.z);
-      scene.add(ring);
-
-      // Decorative non-collidable flag.
-      const flagPole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.04, 3.8, 16),
-        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.55, metalness: 0.05 })
-      );
-      flagPole.position.set(holePosition.x + 0.95, 1.95, holePosition.z);
-      scene.add(flagPole);
-
-      const flag = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.4, 0.75),
-        new THREE.MeshStandardMaterial({ color: 0xfb7185, emissive: 0xe11d48, emissiveIntensity: 0.7, side: THREE.DoubleSide })
-      );
-      flag.position.set(holePosition.x + 1.65, 2.75, holePosition.z);
-      scene.add(flag);
 
       const keys = {};
       const velocity = new THREE.Vector3();
-      const controlAccel = 38;
-      const gravity = 23;
-      const groundFriction = 2.8;
-      const airDrag = 0.22;
-      const bounce = 0.42;
-      const maxSpeed = 34;
-      const slopeForce = 27;
+      const controlAccel = 42;
+      const gravity = 24;
+      const groundFriction = 2.5;
+      const airDrag = 0.21;
+      const bounce = 0.43;
+      const maxSpeed = 36;
+      const slopeForce = 30;
       let grounded = true;
       let audioStarted = false;
       let startTime = performance.now();
@@ -272,7 +284,9 @@
       let won = false;
       let bestTime = Number.POSITIVE_INFINITY;
       let lastBoostTime = -10;
+      let collectedCoins = 0;
 
+      const coinsEl = document.getElementById("coins");
       const timeEl = document.getElementById("time");
       const scoreEl = document.getElementById("score");
       const bestEl = document.getElementById("best");
@@ -281,36 +295,29 @@
       const clock = new THREE.Clock();
 
       function getTerrain(x, z) {
-        let height = 0;
+        let bestHeight = 0;
         let gradX = 0;
         let gradZ = 0;
 
-        ramps.forEach((ramp) => {
-          const b = rampBounds(ramp);
-          if (x < b.xMin || x > b.xMax || z < b.zMin || z > b.zMax) {
-            return;
-          }
+        for (const ramp of rampPhysics) {
+          const relX = x - ramp.cx;
+          const relZ = z - ramp.cz;
+          const along = relX * ramp.dirX + relZ * ramp.dirZ;
+          const across = relX * ramp.sideX + relZ * ramp.sideZ;
 
-          if (ramp.axis === "z") {
-            const t = (z - b.zMin) / (b.zMax - b.zMin);
-            const h = THREE.MathUtils.lerp(0, ramp.rise, t);
-            if (h > height) {
-              height = h;
-              gradX = 0;
-              gradZ = ramp.rise / ramp.depth;
-            }
-          } else {
-            const t = (x - b.xMin) / (b.xMax - b.xMin);
-            const h = THREE.MathUtils.lerp(0, ramp.rise, t);
-            if (h > height) {
-              height = h;
-              gradX = ramp.rise / ramp.width;
-              gradZ = 0;
-            }
-          }
-        });
+          if (Math.abs(across) > ramp.halfW || Math.abs(along) > ramp.halfL) continue;
 
-        return { height, gradX, gradZ };
+          const t = (along + ramp.halfL) / ramp.length;
+          const h = ramp.rise * t;
+
+          if (h >= bestHeight) {
+            bestHeight = h;
+            gradX = (ramp.rise / ramp.length) * ramp.dirX;
+            gradZ = (ramp.rise / ramp.length) * ramp.dirZ;
+          }
+        }
+
+        return { height: bestHeight, gradX, gradZ };
       }
 
       function resolveObstacleCollisions() {
@@ -323,16 +330,14 @@
           const minZ = o.z - o.d / 2 - ballRadius;
           const maxZ = o.z + o.d / 2 + ballRadius;
 
-          if (ball.position.x < minX || ball.position.x > maxX || ball.position.z < minZ || ball.position.z > maxZ) {
-            return;
-          }
+          if (ball.position.x < minX || ball.position.x > maxX || ball.position.z < minZ || ball.position.z > maxZ) return;
 
           const penLeft = Math.abs(ball.position.x - minX);
           const penRight = Math.abs(maxX - ball.position.x);
           const penTop = Math.abs(maxZ - ball.position.z);
           const penBottom = Math.abs(ball.position.z - minZ);
-
           const minPen = Math.min(penLeft, penRight, penTop, penBottom);
+
           if (minPen === penLeft) {
             ball.position.x = minX;
             velocity.x = -Math.abs(velocity.x) * bounce;
@@ -359,8 +364,22 @@
             const dir = horizontal.lengthSq() > 0.01 ? horizontal.normalize() : new THREE.Vector2(0, -1);
             velocity.x += dir.x * pad.boost;
             velocity.z += dir.y * pad.boost;
-            velocity.y += 1.3;
+            velocity.y += 1.5;
             lastBoostTime = nowSeconds;
+          }
+        }
+      }
+
+      function collectCoins() {
+        for (const coin of coins) {
+          if (coin.collected) continue;
+          const dx = ball.position.x - coin.x;
+          const dz = ball.position.z - coin.z;
+          if (Math.hypot(dx, dz) < 1.7) {
+            coin.collected = true;
+            coin.mesh.visible = false;
+            collectedCoins += 1;
+            coinsEl.textContent = `${collectedCoins}/10`;
           }
         }
       }
@@ -445,12 +464,15 @@
 
           const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
           if (horizontalSpeed > 0) {
-            const decel = Math.max(0, horizontalSpeed - groundFriction * dt * (1 + Math.abs(terrainBefore.gradX) + Math.abs(terrainBefore.gradZ)));
+            const decel = Math.max(
+              0,
+              horizontalSpeed - groundFriction * dt * (1 + Math.abs(terrainBefore.gradX) + Math.abs(terrainBefore.gradZ))
+            );
             velocity.x *= decel / horizontalSpeed;
             velocity.z *= decel / horizontalSpeed;
           }
 
-          // Carry ramp slope into take-off vertical velocity.
+          // slope contributes to take-off velocity on ramp exits
           velocity.y = velocity.x * terrainBefore.gradX + velocity.z * terrainBefore.gradZ;
         } else {
           velocity.x *= Math.max(0, 1 - airDrag * dt);
@@ -469,19 +491,19 @@
         ball.position.y += velocity.y * dt;
         ball.position.z += velocity.z * dt;
 
-        if (ball.position.x > wallX) {
-          ball.position.x = wallX;
+        if (ball.position.x > wallLimit) {
+          ball.position.x = wallLimit;
           velocity.x *= -bounce;
-        } else if (ball.position.x < -wallX) {
-          ball.position.x = -wallX;
+        } else if (ball.position.x < -wallLimit) {
+          ball.position.x = -wallLimit;
           velocity.x *= -bounce;
         }
 
-        if (ball.position.z > wallZMax) {
-          ball.position.z = wallZMax;
+        if (ball.position.z > wallLimit) {
+          ball.position.z = wallLimit;
           velocity.z *= -bounce;
-        } else if (ball.position.z < wallZMin) {
-          ball.position.z = wallZMin;
+        } else if (ball.position.z < -wallLimit) {
+          ball.position.z = -wallLimit;
           velocity.z *= -bounce;
         }
 
@@ -499,31 +521,23 @@
         }
 
         applyBoosts(performance.now() / 1000);
+        collectCoins();
 
         const rollAxis = new THREE.Vector3(velocity.z, 0, -velocity.x).normalize();
         if (hSpeed > 0.001 && Number.isFinite(rollAxis.x)) {
           ball.rotateOnWorldAxis(rollAxis, (hSpeed * dt) / ballRadius);
         }
 
-        const toHole = new THREE.Vector2(ball.position.x - holePosition.x, ball.position.z - holePosition.z);
-        const sinkDistance = holeRadius - ballRadius * 0.34;
-        if (toHole.length() < sinkDistance && hSpeed < 7 && Math.abs(ball.position.y - groundY) < 0.12) {
+        if (collectedCoins === 10) {
           won = true;
           const finalTime = elapsed;
-          const score = Math.max(0, Math.round(20000 / Math.max(finalTime, 0.1)));
+          const score = Math.max(0, Math.round(22000 / Math.max(finalTime, 0.1)));
           scoreEl.textContent = String(score);
-          message.textContent = `Hole complete in ${finalTime.toFixed(2)}s!`;
+          message.textContent = `All coins collected in ${finalTime.toFixed(2)}s!`;
           if (finalTime < bestTime) {
             bestTime = finalTime;
             bestEl.textContent = `${bestTime.toFixed(2)}s`;
           }
-        }
-
-        if (won) {
-          velocity.set(0, 0, 0);
-          ball.position.y = THREE.MathUtils.lerp(ball.position.y, -0.2, dt * 4.6);
-          ball.position.x = THREE.MathUtils.lerp(ball.position.x, holePosition.x, dt * 4.3);
-          ball.position.z = THREE.MathUtils.lerp(ball.position.z, holePosition.z, dt * 4.3);
         }
       }
 
@@ -531,19 +545,28 @@
         if (won) return;
         elapsed = (performance.now() - startTime) / 1000;
         timeEl.textContent = `${elapsed.toFixed(2)}s`;
-        scoreEl.textContent = String(Math.max(0, Math.round(20000 / Math.max(elapsed, 0.15))));
+        scoreEl.textContent = String(Math.max(0, Math.round(22000 / Math.max(elapsed, 0.15))));
+      }
+
+      function animateCoins(timeSec) {
+        for (const coin of coins) {
+          if (!coin.collected) {
+            coin.mesh.rotation.z += 0.04;
+            coin.mesh.position.y = 1.35 + Math.sin(timeSec * 2.8 + coin.x * 0.12 + coin.z * 0.07) * 0.18;
+          }
+        }
       }
 
       function updateCamera() {
         const speedFactor = THREE.MathUtils.clamp(Math.hypot(velocity.x, velocity.z) / maxSpeed, 0, 1);
         const desired = new THREE.Vector3(
           ball.position.x,
-          13 + speedFactor * 4 + ball.position.y * 0.12,
-          ball.position.z + 18 + speedFactor * 8
+          16 + speedFactor * 6 + ball.position.y * 0.12,
+          ball.position.z + 22 + speedFactor * 10
         );
-        camera.position.lerp(desired, 0.08);
-        camera.lookAt(ball.position.x, ball.position.y * 0.5, ball.position.z - 2);
-        trailLight.position.set(ball.position.x, ball.position.y + 2, ball.position.z + 1.3);
+        camera.position.lerp(desired, 0.07);
+        camera.lookAt(ball.position.x, ball.position.y * 0.45, ball.position.z - 2);
+        trailLight.position.set(ball.position.x, ball.position.y + 2, ball.position.z + 1.2);
       }
 
       function animate() {
@@ -553,8 +576,7 @@
         updateCamera();
 
         const t = performance.now() * 0.001;
-        flag.rotation.y = Math.sin(t * 2.4) * 0.18;
-        flag.position.y = 2.75 + Math.sin(t * 3.4) * 0.05;
+        animateCoins(t);
 
         renderer.render(scene, camera);
         requestAnimationFrame(animate);
