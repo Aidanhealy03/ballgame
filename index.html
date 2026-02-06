@@ -3,161 +3,353 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mini Golf Ball Roll</title>
+    <title>Neon Ball Golf 198X</title>
     <style>
       :root {
         color-scheme: dark;
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: "Trebuchet MS", "Segoe UI", sans-serif;
       }
 
       body {
         margin: 0;
         overflow: hidden;
-        background: #0f172a;
+        background: radial-gradient(circle at top, #2b1055 0%, #090014 45%, #04030c 100%);
       }
 
       #hud {
         position: fixed;
         top: 1rem;
         left: 1rem;
-        z-index: 1;
-        background: rgba(15, 23, 42, 0.75);
-        color: #e2e8f0;
-        padding: 0.8rem 1rem;
+        z-index: 10;
+        background: rgba(7, 7, 24, 0.72);
+        border: 1px solid rgba(56, 189, 248, 0.6);
+        box-shadow: 0 0 18px rgba(244, 114, 182, 0.4);
+        color: #dbeafe;
+        padding: 0.9rem 1rem;
         border-radius: 10px;
-        max-width: 320px;
+        max-width: 360px;
         line-height: 1.35;
-        font-size: 0.95rem;
+        font-size: 0.94rem;
       }
 
       #hud h1 {
-        margin: 0 0 0.35rem;
+        margin: 0 0 0.4rem;
+        color: #f472b6;
+        letter-spacing: 0.08em;
+        text-shadow: 0 0 7px #f472b6;
         font-size: 1rem;
       }
 
+      #stats {
+        margin-top: 0.4rem;
+      }
+
+      .stat-label {
+        color: #67e8f9;
+      }
+
       #message {
-        margin-top: 0.35rem;
+        margin-top: 0.45rem;
         color: #86efac;
         font-weight: bold;
+        text-shadow: 0 0 7px rgba(134, 239, 172, 0.85);
+      }
+
+      #audioHint {
+        margin-top: 0.35rem;
+        color: #facc15;
+        font-size: 0.82rem;
       }
     </style>
   </head>
   <body>
     <div id="hud">
-      <h1>3D Ball Golf</h1>
-      <div>Use <strong>WASD</strong> or <strong>Arrow Keys</strong> to roll the ball.</div>
-      <div>Goal: sink the white ball into the hole.</div>
+      <h1>NEON BALL GOLF 198X</h1>
+      <div>Controls: <strong>WASD</strong> or <strong>Arrow Keys</strong></div>
+      <div>Hit neon pads for speed boosts, use ramps for angled shots.</div>
+      <div>Objective: sink the white ball into the hole fast.</div>
+      <div id="stats">
+        <div><span class="stat-label">Time:</span> <span id="time">0.00s</span></div>
+        <div><span class="stat-label">Score:</span> <span id="score">--</span></div>
+        <div><span class="stat-label">Best:</span> <span id="best">--</span></div>
+      </div>
       <div id="message"></div>
+      <div id="audioHint">Press any movement key to start music.</div>
     </div>
 
     <script type="module">
       import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js";
 
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x87ceeb);
+      scene.fog = new THREE.FogExp2(0x12001f, 0.0085);
 
       const camera = new THREE.PerspectiveCamera(
-        60,
+        62,
         window.innerWidth / window.innerHeight,
         0.1,
-        100
+        250
       );
-      camera.position.set(0, 10, 12);
-      camera.lookAt(0, 0, 0);
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       document.body.appendChild(renderer.domElement);
 
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
-      scene.add(ambientLight);
+      const hemi = new THREE.HemisphereLight(0x7dd3fc, 0x20003a, 0.65);
+      scene.add(hemi);
 
-      const sun = new THREE.DirectionalLight(0xffffff, 0.95);
-      sun.position.set(6, 12, 8);
+      const sun = new THREE.DirectionalLight(0xff8bdc, 1.15);
+      sun.position.set(18, 30, 10);
       scene.add(sun);
 
-      const groundSize = 30;
-      const wallLimit = groundSize / 2 - 0.6;
-
-      const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(groundSize, groundSize),
-        new THREE.MeshStandardMaterial({ color: 0x27ae60 })
+      // Retro neon horizon
+      const sunDisk = new THREE.Mesh(
+        new THREE.CircleGeometry(7.5, 64),
+        new THREE.MeshBasicMaterial({ color: 0xff7eb6 })
       );
-      ground.rotation.x = -Math.PI / 2;
-      ground.receiveShadow = true;
-      scene.add(ground);
+      sunDisk.position.set(0, 14, -72);
+      scene.add(sunDisk);
 
-      const ballRadius = 0.45;
+      const courseLength = 88;
+      const courseWidth = 34;
+      const wallX = courseWidth / 2 - 0.65;
+      const wallZMin = -courseLength / 2 + 0.65;
+      const wallZMax = courseLength / 2 - 0.65;
+
+      // Base dark floor
+      const baseFloor = new THREE.Mesh(
+        new THREE.PlaneGeometry(courseWidth, courseLength),
+        new THREE.MeshStandardMaterial({ color: 0x09122b, roughness: 0.9, metalness: 0.05 })
+      );
+      baseFloor.rotation.x = -Math.PI / 2;
+      scene.add(baseFloor);
+
+      // Neon grid overlay
+      const grid = new THREE.GridHelper(courseWidth, 34, 0xff4db8, 0x22d3ee);
+      grid.position.y = 0.02;
+      scene.add(grid);
+
+      // Playable green-ish lane
+      const lane = new THREE.Mesh(
+        new THREE.PlaneGeometry(courseWidth - 2, courseLength - 2),
+        new THREE.MeshStandardMaterial({ color: 0x0d6b4b, roughness: 0.82, metalness: 0.03 })
+      );
+      lane.rotation.x = -Math.PI / 2;
+      lane.position.y = 0.01;
+      scene.add(lane);
+
+      const rampData = [
+        { xMin: -8, xMax: 8, zMin: 8, zMax: 18, h0: 0, h1: 2.2 },
+        { xMin: -12, xMax: -3, zMin: -12, zMax: -2, h0: 0, h1: 2.8 },
+        { xMin: 2, xMax: 12, zMin: -30, zMax: -18, h0: 0, h1: 3.2 },
+      ];
+
+      function buildRampVisual(ramp) {
+        const width = ramp.xMax - ramp.xMin;
+        const depth = ramp.zMax - ramp.zMin;
+        const height = ramp.h1 - ramp.h0;
+
+        const geom = new THREE.BoxGeometry(width, Math.max(0.3, Math.abs(height)), depth);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.7, metalness: 0.06 });
+        const mesh = new THREE.Mesh(geom, mat);
+
+        mesh.position.set((ramp.xMin + ramp.xMax) / 2, 0.15 + Math.abs(height) / 2, (ramp.zMin + ramp.zMax) / 2);
+        mesh.rotation.x = -Math.atan2(height, depth);
+        scene.add(mesh);
+      }
+
+      rampData.forEach(buildRampVisual);
+
+      const boostPads = [
+        { x: -9, z: 26, r: 1.8, boost: 11 },
+        { x: 9.5, z: 3, r: 1.6, boost: 12.5 },
+        { x: -2.5, z: -21, r: 2.1, boost: 14 },
+      ];
+
+      boostPads.forEach((pad) => {
+        const padMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(pad.r, pad.r, 0.2, 28),
+          new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xbe185d, emissiveIntensity: 1.2 })
+        );
+        padMesh.position.set(pad.x, 0.12, pad.z);
+        scene.add(padMesh);
+      });
+
+      const ballRadius = 0.52;
       const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(ballRadius, 40, 40),
-        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.05 })
+        new THREE.SphereGeometry(ballRadius, 42, 42),
+        new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.1 })
       );
-      ball.position.set(-10, ballRadius, 10);
+      ball.position.set(0, ballRadius, courseLength / 2 - 6);
       scene.add(ball);
 
-      // Hole setup
-      const holeRadius = 0.65;
-      const holePosition = new THREE.Vector3(10, 0.02, -9);
+      const trailLight = new THREE.PointLight(0x7dd3fc, 0.8, 16);
+      scene.add(trailLight);
+
+      const holeRadius = 0.72;
+      const holePosition = new THREE.Vector3(0, 0.02, -courseLength / 2 + 5);
 
       const hole = new THREE.Mesh(
-        new THREE.CylinderGeometry(holeRadius, holeRadius, 0.08, 40),
-        new THREE.MeshStandardMaterial({ color: 0x101010 })
+        new THREE.CylinderGeometry(holeRadius, holeRadius, 0.14, 40),
+        new THREE.MeshStandardMaterial({ color: 0x050505 })
       );
       hole.position.copy(holePosition);
       scene.add(hole);
 
-      // Visual edge around hole
       const ring = new THREE.Mesh(
-        new THREE.TorusGeometry(holeRadius + 0.04, 0.04, 12, 48),
-        new THREE.MeshStandardMaterial({ color: 0xd1d5db })
+        new THREE.TorusGeometry(holeRadius + 0.05, 0.05, 10, 48),
+        new THREE.MeshStandardMaterial({ color: 0xe5e7eb, emissive: 0xe5e7eb, emissiveIntensity: 0.32 })
       );
       ring.rotation.x = Math.PI / 2;
-      ring.position.set(holePosition.x, 0.03, holePosition.z);
+      ring.position.set(holePosition.x, 0.05, holePosition.z);
       scene.add(ring);
 
-      // Flag: purely decorative, no collision logic tied to it
+      // Decorative non-collidable flag.
       const flagPole = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.04, 0.04, 2.8, 16),
-        new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.1, roughness: 0.6 })
+        new THREE.CylinderGeometry(0.04, 0.04, 3.8, 16),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.55, metalness: 0.05 })
       );
-      flagPole.position.set(holePosition.x, 1.4, holePosition.z);
+      flagPole.position.set(holePosition.x + 0.95, 1.95, holePosition.z);
       scene.add(flagPole);
 
       const flag = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.0, 0.6),
-        new THREE.MeshStandardMaterial({ color: 0xe11d48, side: THREE.DoubleSide })
+        new THREE.PlaneGeometry(1.4, 0.75),
+        new THREE.MeshStandardMaterial({ color: 0xfb7185, emissive: 0xe11d48, emissiveIntensity: 0.7, side: THREE.DoubleSide })
       );
-      flag.position.set(holePosition.x + 0.55, 2.25, holePosition.z);
+      flag.position.set(holePosition.x + 1.65, 2.75, holePosition.z);
       scene.add(flag);
 
       const keys = {};
-      window.addEventListener("keydown", (event) => {
-        keys[event.key.toLowerCase()] = true;
-      });
-      window.addEventListener("keyup", (event) => {
-        keys[event.key.toLowerCase()] = false;
-      });
+      let audioStarted = false;
 
+      const timeEl = document.getElementById("time");
+      const scoreEl = document.getElementById("score");
+      const bestEl = document.getElementById("best");
       const message = document.getElementById("message");
-      const velocity = new THREE.Vector3();
-      const acceleration = 9.5;
-      const friction = 0.92;
+      const audioHint = document.getElementById("audioHint");
+
+      const velocity = new THREE.Vector2(0, 0);
+      const controlAccel = 28;
+      const linearDrag = 1.9;
+      const rollingDrag = 0.22;
+      const maxSpeed = 30;
+      const slopeGravity = 24;
+
+      let startTime = performance.now();
+      let elapsed = 0;
       let won = false;
+      let bestScore = Number.POSITIVE_INFINITY;
+      let lastBoostTime = -10;
 
       const clock = new THREE.Clock();
 
-      function applyInput(dt) {
-        const dir = new THREE.Vector3();
+      function getRampHeightAndGradient(x, z) {
+        let bestHeight = 0;
+        let gradient = new THREE.Vector2(0, 0);
 
-        if (keys["w"] || keys["arrowup"]) dir.z -= 1;
-        if (keys["s"] || keys["arrowdown"]) dir.z += 1;
+        for (const ramp of rampData) {
+          if (x >= ramp.xMin && x <= ramp.xMax && z >= ramp.zMin && z <= ramp.zMax) {
+            const t = (z - ramp.zMin) / (ramp.zMax - ramp.zMin);
+            const h = THREE.MathUtils.lerp(ramp.h0, ramp.h1, t);
+            if (h >= bestHeight) {
+              bestHeight = h;
+              gradient.set(0, (ramp.h1 - ramp.h0) / (ramp.zMax - ramp.zMin));
+            }
+          }
+        }
+
+        return { height: bestHeight, gradient };
+      }
+
+      function startMusic() {
+        if (audioStarted) return;
+        audioStarted = true;
+        audioHint.textContent = "Synth groove online.";
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+
+        const ctx = new AudioCtx();
+        const master = ctx.createGain();
+        master.gain.value = 0.05;
+        master.connect(ctx.destination);
+
+        const bassFreqs = [82.41, 98.0, 110.0, 98.0, 123.47, 110.0, 98.0, 82.41];
+        let step = 0;
+
+        const playStep = () => {
+          const now = ctx.currentTime;
+          const osc = ctx.createOscillator();
+          const lfo = ctx.createOscillator();
+          const lfoGain = ctx.createGain();
+          const amp = ctx.createGain();
+
+          osc.type = "sawtooth";
+          osc.frequency.value = bassFreqs[step % bassFreqs.length];
+
+          lfo.type = "square";
+          lfo.frequency.value = 8;
+          lfoGain.gain.value = 9;
+
+          amp.gain.setValueAtTime(0.0001, now);
+          amp.gain.exponentialRampToValueAtTime(0.12, now + 0.015);
+          amp.gain.exponentialRampToValueAtTime(0.0001, now + 0.33);
+
+          lfo.connect(lfoGain);
+          lfoGain.connect(osc.frequency);
+          osc.connect(amp);
+          amp.connect(master);
+
+          osc.start(now);
+          lfo.start(now);
+          osc.stop(now + 0.34);
+          lfo.stop(now + 0.34);
+          step += 1;
+        };
+
+        playStep();
+        setInterval(playStep, 350);
+      }
+
+      function onKeyDown(event) {
+        keys[event.key.toLowerCase()] = true;
+        if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(event.key.toLowerCase())) {
+          startMusic();
+        }
+      }
+
+      function onKeyUp(event) {
+        keys[event.key.toLowerCase()] = false;
+      }
+
+      window.addEventListener("keydown", onKeyDown);
+      window.addEventListener("keyup", onKeyUp);
+
+      function applyInput(dt) {
+        const dir = new THREE.Vector2(0, 0);
+        if (keys["w"] || keys["arrowup"]) dir.y -= 1;
+        if (keys["s"] || keys["arrowdown"]) dir.y += 1;
         if (keys["a"] || keys["arrowleft"]) dir.x -= 1;
         if (keys["d"] || keys["arrowright"]) dir.x += 1;
 
         if (dir.lengthSq() > 0) {
-          dir.normalize().multiplyScalar(acceleration * dt);
-          velocity.add(dir);
+          dir.normalize();
+          velocity.addScaledVector(dir, controlAccel * dt);
+        }
+      }
+
+      function applyBoosts(nowSeconds) {
+        for (const pad of boostPads) {
+          const dx = ball.position.x - pad.x;
+          const dz = ball.position.z - pad.z;
+          const dist = Math.hypot(dx, dz);
+
+          if (dist < pad.r + ballRadius * 0.45 && nowSeconds - lastBoostTime > 0.2) {
+            const v = new THREE.Vector2(velocity.x, velocity.y);
+            let direction = v.lengthSq() > 0.01 ? v.normalize() : new THREE.Vector2(0, -1);
+            velocity.addScaledVector(direction, pad.boost);
+            lastBoostTime = nowSeconds;
+          }
         }
       }
 
@@ -166,69 +358,105 @@
 
         applyInput(dt);
 
-        velocity.multiplyScalar(Math.pow(friction, dt * 60));
-        ball.position.x += velocity.x * dt;
-        ball.position.z += velocity.z * dt;
+        const rampSample = getRampHeightAndGradient(ball.position.x, ball.position.z);
+        velocity.y += -rampSample.gradient.y * slopeGravity * dt;
 
-        // Keep ball inside the course
-        if (ball.position.x > wallLimit) {
-          ball.position.x = wallLimit;
-          velocity.x *= -0.35;
-        } else if (ball.position.x < -wallLimit) {
-          ball.position.x = -wallLimit;
-          velocity.x *= -0.35;
-        }
-
-        if (ball.position.z > wallLimit) {
-          ball.position.z = wallLimit;
-          velocity.z *= -0.35;
-        } else if (ball.position.z < -wallLimit) {
-          ball.position.z = -wallLimit;
-          velocity.z *= -0.35;
-        }
-
-        // Rotate ball to simulate rolling
-        const rollAxis = new THREE.Vector3(velocity.z, 0, -velocity.x).normalize();
         const speed = velocity.length();
-        if (speed > 0.0001 && Number.isFinite(rollAxis.x)) {
-          ball.rotateOnWorldAxis(rollAxis, (speed * dt) / ballRadius);
+        if (speed > 0) {
+          const drag = linearDrag + rollingDrag * speed;
+          const nextSpeed = Math.max(0, speed - drag * dt);
+          velocity.multiplyScalar(nextSpeed / speed);
         }
 
-        const toHole = new THREE.Vector2(
-          ball.position.x - holePosition.x,
-          ball.position.z - holePosition.z
-        );
+        if (velocity.length() > maxSpeed) {
+          velocity.setLength(maxSpeed);
+        }
 
-        const sinkDistance = holeRadius - ballRadius * 0.32;
-        const canSink = toHole.length() < sinkDistance;
-        const slowEnough = velocity.length() < 2.2;
+        ball.position.x += velocity.x * dt;
+        ball.position.z += velocity.y * dt;
 
-        if (canSink && slowEnough) {
+        if (ball.position.x > wallX) {
+          ball.position.x = wallX;
+          velocity.x *= -0.46;
+        } else if (ball.position.x < -wallX) {
+          ball.position.x = -wallX;
+          velocity.x *= -0.46;
+        }
+
+        if (ball.position.z > wallZMax) {
+          ball.position.z = wallZMax;
+          velocity.y *= -0.4;
+        } else if (ball.position.z < wallZMin) {
+          ball.position.z = wallZMin;
+          velocity.y *= -0.4;
+        }
+
+        const nowSeconds = performance.now() / 1000;
+        applyBoosts(nowSeconds);
+
+        const postSample = getRampHeightAndGradient(ball.position.x, ball.position.z);
+        ball.position.y = ballRadius + postSample.height;
+
+        const rollAxis = new THREE.Vector3(velocity.y, 0, -velocity.x).normalize();
+        if (velocity.length() > 0.0001 && Number.isFinite(rollAxis.x)) {
+          ball.rotateOnWorldAxis(rollAxis, (velocity.length() * dt) / ballRadius);
+        }
+
+        const toHole = new THREE.Vector2(ball.position.x - holePosition.x, ball.position.z - holePosition.z);
+        const sinkDistance = holeRadius - ballRadius * 0.33;
+
+        if (toHole.length() < sinkDistance && velocity.length() < 5.7) {
           won = true;
-          velocity.set(0, 0, 0);
-          message.textContent = "Great shot! Ball sunk in the hole 🎉";
+          velocity.set(0, 0);
+          const finalTime = elapsed;
+          const score = Math.max(0, Math.round(15000 / Math.max(finalTime, 0.1)));
+          scoreEl.textContent = String(score);
+          message.textContent = `Hole complete in ${finalTime.toFixed(2)}s!`;
+
+          if (finalTime < bestScore) {
+            bestScore = finalTime;
+            bestEl.textContent = `${bestScore.toFixed(2)}s`;
+          }
         }
 
         if (won) {
-          ball.position.y = THREE.MathUtils.lerp(ball.position.y, -0.2, dt * 3.5);
-          ball.position.x = THREE.MathUtils.lerp(ball.position.x, holePosition.x, dt * 3.5);
-          ball.position.z = THREE.MathUtils.lerp(ball.position.z, holePosition.z, dt * 3.5);
+          ball.position.y = THREE.MathUtils.lerp(ball.position.y, -0.16, dt * 4.5);
+          ball.position.x = THREE.MathUtils.lerp(ball.position.x, holePosition.x, dt * 4.2);
+          ball.position.z = THREE.MathUtils.lerp(ball.position.z, holePosition.z, dt * 4.2);
+        }
+      }
+
+      function updateHud() {
+        if (!won) {
+          elapsed = (performance.now() - startTime) / 1000;
+          timeEl.textContent = `${elapsed.toFixed(2)}s`;
+          const liveScore = Math.max(0, Math.round(15000 / Math.max(elapsed, 0.15)));
+          scoreEl.textContent = String(liveScore);
         }
       }
 
       function updateCamera() {
-        const target = new THREE.Vector3(ball.position.x, 0, ball.position.z);
-        const camOffset = new THREE.Vector3(0, 10, 12);
-        const desired = target.clone().add(camOffset);
+        const speedFactor = THREE.MathUtils.clamp(velocity.length() / maxSpeed, 0, 1);
+        const dynamicHeight = 12 + speedFactor * 3;
+        const dynamicBack = 16 + speedFactor * 7;
+        const target = new THREE.Vector3(ball.position.x, ball.position.y * 0.45, ball.position.z);
+        const desired = new THREE.Vector3(ball.position.x, dynamicHeight, ball.position.z + dynamicBack);
+        camera.position.lerp(desired, 0.07);
+        camera.lookAt(target);
 
-        camera.position.lerp(desired, 0.06);
-        camera.lookAt(target.x, 0, target.z);
+        trailLight.position.set(ball.position.x, ball.position.y + 2, ball.position.z + 1.3);
       }
 
       function animate() {
-        const dt = Math.min(clock.getDelta(), 1 / 30);
+        const dt = Math.min(clock.getDelta(), 1 / 24);
         updatePhysics(dt);
+        updateHud();
         updateCamera();
+
+        const t = performance.now() * 0.001;
+        flag.rotation.y = Math.sin(t * 2.4) * 0.15;
+        flag.position.y = 2.75 + Math.sin(t * 3.4) * 0.05;
+
         renderer.render(scene, camera);
         requestAnimationFrame(animate);
       }
