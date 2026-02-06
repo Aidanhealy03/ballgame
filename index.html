@@ -27,7 +27,7 @@
         color: #dbeafe;
         padding: 0.9rem 1rem;
         border-radius: 10px;
-        max-width: 360px;
+        max-width: 380px;
         line-height: 1.35;
         font-size: 0.94rem;
       }
@@ -38,10 +38,6 @@
         letter-spacing: 0.08em;
         text-shadow: 0 0 7px #f472b6;
         font-size: 1rem;
-      }
-
-      #stats {
-        margin-top: 0.4rem;
       }
 
       .stat-label {
@@ -66,13 +62,11 @@
     <div id="hud">
       <h1>NEON BALL GOLF 198X</h1>
       <div>Controls: <strong>WASD</strong> or <strong>Arrow Keys</strong></div>
-      <div>Hit neon pads for speed boosts, use ramps for angled shots.</div>
-      <div>Objective: sink the white ball into the hole fast.</div>
-      <div id="stats">
-        <div><span class="stat-label">Time:</span> <span id="time">0.00s</span></div>
-        <div><span class="stat-label">Score:</span> <span id="score">--</span></div>
-        <div><span class="stat-label">Best:</span> <span id="best">--</span></div>
-      </div>
+      <div>Use ramps to launch. Hit neon pads for boost. Dodge obstacles.</div>
+      <div>Objective: sink the white ball quickly.</div>
+      <div><span class="stat-label">Time:</span> <span id="time">0.00s</span></div>
+      <div><span class="stat-label">Score:</span> <span id="score">--</span></div>
+      <div><span class="stat-label">Best:</span> <span id="best">--</span></div>
       <div id="message"></div>
       <div id="audioHint">Press any movement key to start music.</div>
     </div>
@@ -81,98 +75,141 @@
       import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js";
 
       const scene = new THREE.Scene();
-      scene.fog = new THREE.FogExp2(0x12001f, 0.0085);
+      scene.fog = new THREE.FogExp2(0x12001f, 0.008);
 
-      const camera = new THREE.PerspectiveCamera(
-        62,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        250
-      );
-
+      const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 320);
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       document.body.appendChild(renderer.domElement);
 
-      const hemi = new THREE.HemisphereLight(0x7dd3fc, 0x20003a, 0.65);
-      scene.add(hemi);
+      scene.add(new THREE.HemisphereLight(0x7dd3fc, 0x20003a, 0.65));
+      const sunLight = new THREE.DirectionalLight(0xff8bdc, 1.1);
+      sunLight.position.set(18, 30, 10);
+      scene.add(sunLight);
 
-      const sun = new THREE.DirectionalLight(0xff8bdc, 1.15);
-      sun.position.set(18, 30, 10);
-      scene.add(sun);
-
-      // Retro neon horizon
-      const sunDisk = new THREE.Mesh(
-        new THREE.CircleGeometry(7.5, 64),
+      const horizonSun = new THREE.Mesh(
+        new THREE.CircleGeometry(9, 64),
         new THREE.MeshBasicMaterial({ color: 0xff7eb6 })
       );
-      sunDisk.position.set(0, 14, -72);
-      scene.add(sunDisk);
+      horizonSun.position.set(0, 16, -130);
+      scene.add(horizonSun);
 
-      const courseLength = 88;
-      const courseWidth = 34;
-      const wallX = courseWidth / 2 - 0.65;
-      const wallZMin = -courseLength / 2 + 0.65;
-      const wallZMax = courseLength / 2 - 0.65;
+      const courseLength = 128;
+      const courseWidth = 36;
+      const wallX = courseWidth / 2 - 0.7;
+      const wallZMin = -courseLength / 2 + 0.8;
+      const wallZMax = courseLength / 2 - 0.8;
 
-      // Base dark floor
       const baseFloor = new THREE.Mesh(
         new THREE.PlaneGeometry(courseWidth, courseLength),
-        new THREE.MeshStandardMaterial({ color: 0x09122b, roughness: 0.9, metalness: 0.05 })
+        new THREE.MeshStandardMaterial({ color: 0x071228, roughness: 0.92, metalness: 0.04 })
       );
       baseFloor.rotation.x = -Math.PI / 2;
       scene.add(baseFloor);
 
-      // Neon grid overlay
-      const grid = new THREE.GridHelper(courseWidth, 34, 0xff4db8, 0x22d3ee);
-      grid.position.y = 0.02;
+      const grid = new THREE.GridHelper(courseWidth, 36, 0xff4db8, 0x22d3ee);
+      grid.position.y = 0.03;
       scene.add(grid);
 
-      // Playable green-ish lane
       const lane = new THREE.Mesh(
         new THREE.PlaneGeometry(courseWidth - 2, courseLength - 2),
         new THREE.MeshStandardMaterial({ color: 0x0d6b4b, roughness: 0.82, metalness: 0.03 })
       );
       lane.rotation.x = -Math.PI / 2;
-      lane.position.y = 0.01;
+      lane.position.y = 0.015;
       scene.add(lane);
 
-      const rampData = [
-        { xMin: -8, xMax: 8, zMin: 8, zMax: 18, h0: 0, h1: 2.2 },
-        { xMin: -12, xMax: -3, zMin: -12, zMax: -2, h0: 0, h1: 2.8 },
-        { xMin: 2, xMax: 12, zMin: -30, zMax: -18, h0: 0, h1: 3.2 },
+      // Ramps defined by center, size, orientation axis, and signed rise.
+      const ramps = [
+        { cx: 0, cz: 34, width: 12, depth: 16, rise: 3.6, axis: "z", color: 0x166534 },
+        { cx: -8, cz: 0, width: 10, depth: 14, rise: -3.2, axis: "z", color: 0x14532d },
+        { cx: 7, cz: -28, width: 9, depth: 12, rise: 4.4, axis: "x", color: 0x15803d },
+        { cx: 0, cz: -50, width: 14, depth: 16, rise: 5.4, axis: "z", color: 0x166534 },
       ];
 
-      function buildRampVisual(ramp) {
-        const width = ramp.xMax - ramp.xMin;
-        const depth = ramp.zMax - ramp.zMin;
-        const height = ramp.h1 - ramp.h0;
-
-        const geom = new THREE.BoxGeometry(width, Math.max(0.3, Math.abs(height)), depth);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.7, metalness: 0.06 });
-        const mesh = new THREE.Mesh(geom, mat);
-
-        mesh.position.set((ramp.xMin + ramp.xMax) / 2, 0.15 + Math.abs(height) / 2, (ramp.zMin + ramp.zMax) / 2);
-        mesh.rotation.x = -Math.atan2(height, depth);
-        scene.add(mesh);
+      function rampBounds(r) {
+        return {
+          xMin: r.cx - r.width / 2,
+          xMax: r.cx + r.width / 2,
+          zMin: r.cz - r.depth / 2,
+          zMax: r.cz + r.depth / 2,
+        };
       }
 
-      rampData.forEach(buildRampVisual);
+      function buildRampMesh(ramp) {
+        const b = rampBounds(ramp);
+        const geometry = new THREE.PlaneGeometry(ramp.width, ramp.depth, 1, 1);
+        const pos = geometry.attributes.position;
+
+        for (let i = 0; i < pos.count; i += 1) {
+          const x = pos.getX(i);
+          const z = pos.getY(i); // plane geometry local Y becomes world Z after rotation
+          const t = ramp.axis === "z"
+            ? (z + ramp.depth / 2) / ramp.depth
+            : (x + ramp.width / 2) / ramp.width;
+          const h = THREE.MathUtils.lerp(0, ramp.rise, t);
+          pos.setZ(i, h);
+        }
+
+        geometry.computeVertexNormals();
+
+        const mesh = new THREE.Mesh(
+          geometry,
+          new THREE.MeshStandardMaterial({ color: ramp.color, roughness: 0.7, metalness: 0.08 })
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.set(ramp.cx, 0.06, ramp.cz);
+        scene.add(mesh);
+
+        // Decorative edge line to make direction obvious.
+        const edge = new THREE.Mesh(
+          new THREE.BoxGeometry(ramp.width, 0.1, 0.15),
+          new THREE.MeshStandardMaterial({ color: 0xf0abfc, emissive: 0xdb2777, emissiveIntensity: 0.4 })
+        );
+        if (ramp.axis === "z") {
+          const highZ = ramp.rise >= 0 ? b.zMax : b.zMin;
+          edge.position.set(ramp.cx, Math.abs(ramp.rise) + 0.12, highZ);
+        } else {
+          const highX = ramp.rise >= 0 ? b.xMax : b.xMin;
+          edge.rotation.y = Math.PI / 2;
+          edge.position.set(highX, Math.abs(ramp.rise) + 0.12, ramp.cz);
+        }
+        scene.add(edge);
+      }
+
+      ramps.forEach(buildRampMesh);
 
       const boostPads = [
-        { x: -9, z: 26, r: 1.8, boost: 11 },
-        { x: 9.5, z: 3, r: 1.6, boost: 12.5 },
-        { x: -2.5, z: -21, r: 2.1, boost: 14 },
+        { x: -10, z: 44, r: 1.9, boost: 13 },
+        { x: 9, z: 9, r: 1.7, boost: 12.5 },
+        { x: -1.5, z: -21, r: 2.2, boost: 14 },
+        { x: 6, z: -58, r: 1.8, boost: 15 },
       ];
 
       boostPads.forEach((pad) => {
-        const padMesh = new THREE.Mesh(
+        const mesh = new THREE.Mesh(
           new THREE.CylinderGeometry(pad.r, pad.r, 0.2, 28),
-          new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xbe185d, emissiveIntensity: 1.2 })
+          new THREE.MeshStandardMaterial({ color: 0xf43f5e, emissive: 0xbe185d, emissiveIntensity: 1.15 })
         );
-        padMesh.position.set(pad.x, 0.12, pad.z);
-        scene.add(padMesh);
+        mesh.position.set(pad.x, 0.12, pad.z);
+        scene.add(mesh);
+      });
+
+      const obstacles = [
+        { x: -6, z: 18, w: 2.2, d: 2.2, h: 1.8 },
+        { x: 5, z: -3, w: 2.5, d: 1.8, h: 2.2 },
+        { x: -2, z: -38, w: 3.6, d: 2.2, h: 2.6 },
+        { x: 8, z: -66, w: 2.2, d: 2.2, h: 2.2 },
+      ];
+
+      obstacles.forEach((o) => {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(o.w, o.h, o.d),
+          new THREE.MeshStandardMaterial({ color: 0x1d4ed8, emissive: 0x312e81, emissiveIntensity: 0.55 })
+        );
+        mesh.position.set(o.x, o.h / 2 + 0.1, o.z);
+        scene.add(mesh);
       });
 
       const ballRadius = 0.52;
@@ -180,14 +217,14 @@
         new THREE.SphereGeometry(ballRadius, 42, 42),
         new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0.1 })
       );
-      ball.position.set(0, ballRadius, courseLength / 2 - 6);
+      ball.position.set(0, ballRadius, courseLength / 2 - 8);
       scene.add(ball);
 
-      const trailLight = new THREE.PointLight(0x7dd3fc, 0.8, 16);
+      const trailLight = new THREE.PointLight(0x7dd3fc, 0.85, 18);
       scene.add(trailLight);
 
-      const holeRadius = 0.72;
-      const holePosition = new THREE.Vector3(0, 0.02, -courseLength / 2 + 5);
+      const holeRadius = 0.74;
+      const holePosition = new THREE.Vector3(0, 0.02, -courseLength / 2 + 6);
 
       const hole = new THREE.Mesh(
         new THREE.CylinderGeometry(holeRadius, holeRadius, 0.14, 40),
@@ -220,45 +257,112 @@
       scene.add(flag);
 
       const keys = {};
+      const velocity = new THREE.Vector3();
+      const controlAccel = 38;
+      const gravity = 23;
+      const groundFriction = 2.8;
+      const airDrag = 0.22;
+      const bounce = 0.42;
+      const maxSpeed = 34;
+      const slopeForce = 27;
+      let grounded = true;
       let audioStarted = false;
+      let startTime = performance.now();
+      let elapsed = 0;
+      let won = false;
+      let bestTime = Number.POSITIVE_INFINITY;
+      let lastBoostTime = -10;
 
       const timeEl = document.getElementById("time");
       const scoreEl = document.getElementById("score");
       const bestEl = document.getElementById("best");
       const message = document.getElementById("message");
       const audioHint = document.getElementById("audioHint");
-
-      const velocity = new THREE.Vector2(0, 0);
-      const controlAccel = 28;
-      const linearDrag = 1.9;
-      const rollingDrag = 0.22;
-      const maxSpeed = 30;
-      const slopeGravity = 24;
-
-      let startTime = performance.now();
-      let elapsed = 0;
-      let won = false;
-      let bestScore = Number.POSITIVE_INFINITY;
-      let lastBoostTime = -10;
-
       const clock = new THREE.Clock();
 
-      function getRampHeightAndGradient(x, z) {
-        let bestHeight = 0;
-        let gradient = new THREE.Vector2(0, 0);
+      function getTerrain(x, z) {
+        let height = 0;
+        let gradX = 0;
+        let gradZ = 0;
 
-        for (const ramp of rampData) {
-          if (x >= ramp.xMin && x <= ramp.xMax && z >= ramp.zMin && z <= ramp.zMax) {
-            const t = (z - ramp.zMin) / (ramp.zMax - ramp.zMin);
-            const h = THREE.MathUtils.lerp(ramp.h0, ramp.h1, t);
-            if (h >= bestHeight) {
-              bestHeight = h;
-              gradient.set(0, (ramp.h1 - ramp.h0) / (ramp.zMax - ramp.zMin));
+        ramps.forEach((ramp) => {
+          const b = rampBounds(ramp);
+          if (x < b.xMin || x > b.xMax || z < b.zMin || z > b.zMax) {
+            return;
+          }
+
+          if (ramp.axis === "z") {
+            const t = (z - b.zMin) / (b.zMax - b.zMin);
+            const h = THREE.MathUtils.lerp(0, ramp.rise, t);
+            if (h > height) {
+              height = h;
+              gradX = 0;
+              gradZ = ramp.rise / ramp.depth;
+            }
+          } else {
+            const t = (x - b.xMin) / (b.xMax - b.xMin);
+            const h = THREE.MathUtils.lerp(0, ramp.rise, t);
+            if (h > height) {
+              height = h;
+              gradX = ramp.rise / ramp.width;
+              gradZ = 0;
             }
           }
-        }
+        });
 
-        return { height: bestHeight, gradient };
+        return { height, gradX, gradZ };
+      }
+
+      function resolveObstacleCollisions() {
+        const yFloor = ball.position.y - ballRadius;
+        obstacles.forEach((o) => {
+          if (yFloor > o.h + 0.2) return;
+
+          const minX = o.x - o.w / 2 - ballRadius;
+          const maxX = o.x + o.w / 2 + ballRadius;
+          const minZ = o.z - o.d / 2 - ballRadius;
+          const maxZ = o.z + o.d / 2 + ballRadius;
+
+          if (ball.position.x < minX || ball.position.x > maxX || ball.position.z < minZ || ball.position.z > maxZ) {
+            return;
+          }
+
+          const penLeft = Math.abs(ball.position.x - minX);
+          const penRight = Math.abs(maxX - ball.position.x);
+          const penTop = Math.abs(maxZ - ball.position.z);
+          const penBottom = Math.abs(ball.position.z - minZ);
+
+          const minPen = Math.min(penLeft, penRight, penTop, penBottom);
+          if (minPen === penLeft) {
+            ball.position.x = minX;
+            velocity.x = -Math.abs(velocity.x) * bounce;
+          } else if (minPen === penRight) {
+            ball.position.x = maxX;
+            velocity.x = Math.abs(velocity.x) * bounce;
+          } else if (minPen === penTop) {
+            ball.position.z = maxZ;
+            velocity.z = Math.abs(velocity.z) * bounce;
+          } else {
+            ball.position.z = minZ;
+            velocity.z = -Math.abs(velocity.z) * bounce;
+          }
+        });
+      }
+
+      function applyBoosts(nowSeconds) {
+        for (const pad of boostPads) {
+          const dx = ball.position.x - pad.x;
+          const dz = ball.position.z - pad.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < pad.r + ballRadius * 0.45 && nowSeconds - lastBoostTime > 0.2) {
+            const horizontal = new THREE.Vector2(velocity.x, velocity.z);
+            const dir = horizontal.lengthSq() > 0.01 ? horizontal.normalize() : new THREE.Vector2(0, -1);
+            velocity.x += dir.x * pad.boost;
+            velocity.z += dir.y * pad.boost;
+            velocity.y += 1.3;
+            lastBoostTime = nowSeconds;
+          }
+        }
       }
 
       function startMusic() {
@@ -268,7 +372,6 @@
 
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
-
         const ctx = new AudioCtx();
         const master = ctx.createGain();
         master.gain.value = 0.05;
@@ -276,7 +379,6 @@
 
         const bassFreqs = [82.41, 98.0, 110.0, 98.0, 123.47, 110.0, 98.0, 82.41];
         let step = 0;
-
         const playStep = () => {
           const now = ctx.currentTime;
           const osc = ctx.createOscillator();
@@ -286,7 +388,6 @@
 
           osc.type = "sawtooth";
           osc.frequency.value = bassFreqs[step % bassFreqs.length];
-
           lfo.type = "square";
           lfo.frequency.value = 8;
           lfoGain.gain.value = 9;
@@ -311,150 +412,148 @@
         setInterval(playStep, 350);
       }
 
-      function onKeyDown(event) {
+      window.addEventListener("keydown", (event) => {
         keys[event.key.toLowerCase()] = true;
         if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(event.key.toLowerCase())) {
           startMusic();
         }
-      }
+      });
 
-      function onKeyUp(event) {
+      window.addEventListener("keyup", (event) => {
         keys[event.key.toLowerCase()] = false;
-      }
-
-      window.addEventListener("keydown", onKeyDown);
-      window.addEventListener("keyup", onKeyUp);
-
-      function applyInput(dt) {
-        const dir = new THREE.Vector2(0, 0);
-        if (keys["w"] || keys["arrowup"]) dir.y -= 1;
-        if (keys["s"] || keys["arrowdown"]) dir.y += 1;
-        if (keys["a"] || keys["arrowleft"]) dir.x -= 1;
-        if (keys["d"] || keys["arrowright"]) dir.x += 1;
-
-        if (dir.lengthSq() > 0) {
-          dir.normalize();
-          velocity.addScaledVector(dir, controlAccel * dt);
-        }
-      }
-
-      function applyBoosts(nowSeconds) {
-        for (const pad of boostPads) {
-          const dx = ball.position.x - pad.x;
-          const dz = ball.position.z - pad.z;
-          const dist = Math.hypot(dx, dz);
-
-          if (dist < pad.r + ballRadius * 0.45 && nowSeconds - lastBoostTime > 0.2) {
-            const v = new THREE.Vector2(velocity.x, velocity.y);
-            let direction = v.lengthSq() > 0.01 ? v.normalize() : new THREE.Vector2(0, -1);
-            velocity.addScaledVector(direction, pad.boost);
-            lastBoostTime = nowSeconds;
-          }
-        }
-      }
+      });
 
       function updatePhysics(dt) {
         if (won) return;
 
-        applyInput(dt);
-
-        const rampSample = getRampHeightAndGradient(ball.position.x, ball.position.z);
-        velocity.y += -rampSample.gradient.y * slopeGravity * dt;
-
-        const speed = velocity.length();
-        if (speed > 0) {
-          const drag = linearDrag + rollingDrag * speed;
-          const nextSpeed = Math.max(0, speed - drag * dt);
-          velocity.multiplyScalar(nextSpeed / speed);
+        const move = new THREE.Vector2(0, 0);
+        if (keys["w"] || keys["arrowup"]) move.y -= 1;
+        if (keys["s"] || keys["arrowdown"]) move.y += 1;
+        if (keys["a"] || keys["arrowleft"]) move.x -= 1;
+        if (keys["d"] || keys["arrowright"]) move.x += 1;
+        if (move.lengthSq() > 0) {
+          move.normalize();
+          velocity.x += move.x * controlAccel * dt;
+          velocity.z += move.y * controlAccel * dt;
         }
 
-        if (velocity.length() > maxSpeed) {
-          velocity.setLength(maxSpeed);
+        const terrainBefore = getTerrain(ball.position.x, ball.position.z);
+
+        if (grounded) {
+          velocity.x += -terrainBefore.gradX * slopeForce * dt;
+          velocity.z += -terrainBefore.gradZ * slopeForce * dt;
+
+          const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
+          if (horizontalSpeed > 0) {
+            const decel = Math.max(0, horizontalSpeed - groundFriction * dt * (1 + Math.abs(terrainBefore.gradX) + Math.abs(terrainBefore.gradZ)));
+            velocity.x *= decel / horizontalSpeed;
+            velocity.z *= decel / horizontalSpeed;
+          }
+
+          // Carry ramp slope into take-off vertical velocity.
+          velocity.y = velocity.x * terrainBefore.gradX + velocity.z * terrainBefore.gradZ;
+        } else {
+          velocity.x *= Math.max(0, 1 - airDrag * dt);
+          velocity.z *= Math.max(0, 1 - airDrag * dt);
+          velocity.y -= gravity * dt;
+        }
+
+        const hSpeed = Math.hypot(velocity.x, velocity.z);
+        if (hSpeed > maxSpeed) {
+          const s = maxSpeed / hSpeed;
+          velocity.x *= s;
+          velocity.z *= s;
         }
 
         ball.position.x += velocity.x * dt;
-        ball.position.z += velocity.y * dt;
+        ball.position.y += velocity.y * dt;
+        ball.position.z += velocity.z * dt;
 
         if (ball.position.x > wallX) {
           ball.position.x = wallX;
-          velocity.x *= -0.46;
+          velocity.x *= -bounce;
         } else if (ball.position.x < -wallX) {
           ball.position.x = -wallX;
-          velocity.x *= -0.46;
+          velocity.x *= -bounce;
         }
 
         if (ball.position.z > wallZMax) {
           ball.position.z = wallZMax;
-          velocity.y *= -0.4;
+          velocity.z *= -bounce;
         } else if (ball.position.z < wallZMin) {
           ball.position.z = wallZMin;
-          velocity.y *= -0.4;
+          velocity.z *= -bounce;
         }
 
-        const nowSeconds = performance.now() / 1000;
-        applyBoosts(nowSeconds);
+        resolveObstacleCollisions();
 
-        const postSample = getRampHeightAndGradient(ball.position.x, ball.position.z);
-        ball.position.y = ballRadius + postSample.height;
+        const terrainAfter = getTerrain(ball.position.x, ball.position.z);
+        const groundY = terrainAfter.height + ballRadius;
 
-        const rollAxis = new THREE.Vector3(velocity.y, 0, -velocity.x).normalize();
-        if (velocity.length() > 0.0001 && Number.isFinite(rollAxis.x)) {
-          ball.rotateOnWorldAxis(rollAxis, (velocity.length() * dt) / ballRadius);
+        if (ball.position.y <= groundY) {
+          ball.position.y = groundY;
+          if (velocity.y < 0) velocity.y = 0;
+          grounded = true;
+        } else {
+          grounded = false;
+        }
+
+        applyBoosts(performance.now() / 1000);
+
+        const rollAxis = new THREE.Vector3(velocity.z, 0, -velocity.x).normalize();
+        if (hSpeed > 0.001 && Number.isFinite(rollAxis.x)) {
+          ball.rotateOnWorldAxis(rollAxis, (hSpeed * dt) / ballRadius);
         }
 
         const toHole = new THREE.Vector2(ball.position.x - holePosition.x, ball.position.z - holePosition.z);
-        const sinkDistance = holeRadius - ballRadius * 0.33;
-
-        if (toHole.length() < sinkDistance && velocity.length() < 5.7) {
+        const sinkDistance = holeRadius - ballRadius * 0.34;
+        if (toHole.length() < sinkDistance && hSpeed < 7 && Math.abs(ball.position.y - groundY) < 0.12) {
           won = true;
-          velocity.set(0, 0);
           const finalTime = elapsed;
-          const score = Math.max(0, Math.round(15000 / Math.max(finalTime, 0.1)));
+          const score = Math.max(0, Math.round(20000 / Math.max(finalTime, 0.1)));
           scoreEl.textContent = String(score);
           message.textContent = `Hole complete in ${finalTime.toFixed(2)}s!`;
-
-          if (finalTime < bestScore) {
-            bestScore = finalTime;
-            bestEl.textContent = `${bestScore.toFixed(2)}s`;
+          if (finalTime < bestTime) {
+            bestTime = finalTime;
+            bestEl.textContent = `${bestTime.toFixed(2)}s`;
           }
         }
 
         if (won) {
-          ball.position.y = THREE.MathUtils.lerp(ball.position.y, -0.16, dt * 4.5);
-          ball.position.x = THREE.MathUtils.lerp(ball.position.x, holePosition.x, dt * 4.2);
-          ball.position.z = THREE.MathUtils.lerp(ball.position.z, holePosition.z, dt * 4.2);
+          velocity.set(0, 0, 0);
+          ball.position.y = THREE.MathUtils.lerp(ball.position.y, -0.2, dt * 4.6);
+          ball.position.x = THREE.MathUtils.lerp(ball.position.x, holePosition.x, dt * 4.3);
+          ball.position.z = THREE.MathUtils.lerp(ball.position.z, holePosition.z, dt * 4.3);
         }
       }
 
       function updateHud() {
-        if (!won) {
-          elapsed = (performance.now() - startTime) / 1000;
-          timeEl.textContent = `${elapsed.toFixed(2)}s`;
-          const liveScore = Math.max(0, Math.round(15000 / Math.max(elapsed, 0.15)));
-          scoreEl.textContent = String(liveScore);
-        }
+        if (won) return;
+        elapsed = (performance.now() - startTime) / 1000;
+        timeEl.textContent = `${elapsed.toFixed(2)}s`;
+        scoreEl.textContent = String(Math.max(0, Math.round(20000 / Math.max(elapsed, 0.15))));
       }
 
       function updateCamera() {
-        const speedFactor = THREE.MathUtils.clamp(velocity.length() / maxSpeed, 0, 1);
-        const dynamicHeight = 12 + speedFactor * 3;
-        const dynamicBack = 16 + speedFactor * 7;
-        const target = new THREE.Vector3(ball.position.x, ball.position.y * 0.45, ball.position.z);
-        const desired = new THREE.Vector3(ball.position.x, dynamicHeight, ball.position.z + dynamicBack);
-        camera.position.lerp(desired, 0.07);
-        camera.lookAt(target);
-
+        const speedFactor = THREE.MathUtils.clamp(Math.hypot(velocity.x, velocity.z) / maxSpeed, 0, 1);
+        const desired = new THREE.Vector3(
+          ball.position.x,
+          13 + speedFactor * 4 + ball.position.y * 0.12,
+          ball.position.z + 18 + speedFactor * 8
+        );
+        camera.position.lerp(desired, 0.08);
+        camera.lookAt(ball.position.x, ball.position.y * 0.5, ball.position.z - 2);
         trailLight.position.set(ball.position.x, ball.position.y + 2, ball.position.z + 1.3);
       }
 
       function animate() {
-        const dt = Math.min(clock.getDelta(), 1 / 24);
+        const dt = Math.min(clock.getDelta(), 1 / 30);
         updatePhysics(dt);
         updateHud();
         updateCamera();
 
         const t = performance.now() * 0.001;
-        flag.rotation.y = Math.sin(t * 2.4) * 0.15;
+        flag.rotation.y = Math.sin(t * 2.4) * 0.18;
         flag.position.y = 2.75 + Math.sin(t * 3.4) * 0.05;
 
         renderer.render(scene, camera);
